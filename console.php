@@ -9,25 +9,27 @@ use PHPExiftool\Reader;
 use PHPExiftool\Driver\Value\ValueInterface;
 use Symfony\Component\Finder\Finder;
 
+define("MIN_SIZE", 0);
+
+/////////////////////////////////////////////
+// $inputDirs    = [
+//     '/volume1/Family/preview'
+// ];
+// $outputDir    = '/volume1/photo';
+// $duplicateDir = '/volume1/Family/duplicates';
+// $brokenDir = '/volume1/Family/broken';
+// $excludeDirs  = ['@eaDir'];
+/////////////////////////////////////////////
+
 
 /////////////////////////////////////////////
 $inputDirs    = [
-    '/volume1/Family/preview'
+   '/home/ibrahim/Desktop/input'
 ];
-$outputDir    = '/volume1/photo';
-$duplicateDir = '/volume1/Family/duplicates';
-$brokenDir = '/volume1/Family/broken';
-$excludeDirs  = ['@eaDir'];
-/////////////////////////////////////////////
-
-
-/////////////////////////////////////////////
-//$inputDirs    = [
-//    '/Users/armen/Desktop/input'
-//];
-//$outputDir    = '/Users/armen/Desktop/output';
-//$duplicateDir = '/Users/armen/Desktop/duplicates';
-//$excludeDirs  = [];
+$outputDir    = '/home/ibrahim/Desktop/output';
+$duplicateDir = '/home/ibrahim/Desktop/duplicates';
+$brokenDir = '/home/ibrahim/Desktop/broken';
+$excludeDirs  = [];
 /////////////////////////////////////////////
 
 
@@ -44,9 +46,12 @@ $logger->pushHandler(new \Monolog\Handler\NullHandler(Logger::ERROR));
 
 foreach ($finder as $file) {
 
+    
     $reader = Reader::create($logger);
-
-    $metaDatas = $reader->files($file->getPathName())->first();
+    if(filesize($file->getPathName())>MIN_SIZE)
+    {
+         $metaDatas = $reader->files($file->getPathName())->first();
+    
 
 
     $pathinfo        = pathinfo($metaDatas->getFile());
@@ -54,7 +59,7 @@ foreach ($finder as $file) {
     $filenamePartial = $pathinfo['filename'];
     $ext             = $pathinfo['extension'];
 
-
+    // var_dump($ext );exit;
     $createdDate = [];
     foreach ($metaDatas as $metadata) {
         $value = $metadata->getValue()->asString();
@@ -86,7 +91,10 @@ foreach ($finder as $file) {
             $createdDate['low'] = $date->setTimezone($date->getTimezone())->format('Y-m-d His') . '000';
         }
     }
-
+    }
+    else {
+        $filepath  =$file->getPathName();
+    }
     $createdDateValue = '';
     if (isset($createdDate['high'])) {
         $createdDateValue = $createdDate['high'];
@@ -98,15 +106,16 @@ foreach ($finder as $file) {
 
     if ($createdDateValue) {
         $date           = \DateTime::createFromFormat('Y-m-d His', substr($createdDateValue, 0, -3));
-        if(!$date instanceof \DateTime) {
-            $brokenFilePath = $brokenDir . '/' . $filename . '-' . substr(md5(uniqid(rand(), true)), 0, 6) . '.' . $ext;
+        if(!$date instanceof \DateTime ) {
+            // var_dump($filename);exit;
+            $brokenFilePath = $brokenDir . '/' . $filename . '-' . substr(md5(uniqid(rand(), true)), 0, 6) . '.' . strtolower($ext);
             $fs->copy($metaDatas->getFile(), $brokenFilePath);
             $fs->remove($metaDatas->getFile());
             echo 'Broken: ' . $filename . ' => ' . pathinfo($brokenFilePath, PATHINFO_BASENAME) . PHP_EOL;
         } else {
-            $outputFilePath = $outputDir . '/' . $date->format('Y/Y-m') . '/' . $createdDateValue . '.' . $ext;
+            $outputFilePath = $outputDir . '/' . $date->format('Y/Y-m') . '/' . $createdDateValue . '.' . strtolower($ext);
             if (file_exists($outputFilePath)) {
-                $duplicateFilePath = $duplicateDir . '/' . $date->format('Y/Y-m') . '/' . $createdDateValue . '-' . substr(md5(uniqid(rand(), true)), 0, 6) . '.' . $ext;
+                $duplicateFilePath = $duplicateDir . '/' . $date->format('Y/Y-m') . '/' . $createdDateValue . '-' . substr(md5(uniqid(rand(), true)), 0, 6) . '.' . strtolower($ext);
                 $fs->copy($metaDatas->getFile(), $duplicateFilePath);
                 $fs->remove($metaDatas->getFile());
                 echo 'Duplicate: ' . $filename . ' => ' . pathinfo($duplicateFilePath, PATHINFO_BASENAME) . PHP_EOL;
@@ -118,16 +127,15 @@ foreach ($finder as $file) {
         }
     } else {
         echo 'Not Found ' . $filename . PHP_EOL;
-        $brokenFilePath = $brokenDir . '/' . $date->format('Y/Y-m') . '/' . $filename . '-' . substr(md5(uniqid(rand(), true)), 0, 6) . '.' . $ext;
-        $fs->copy($metaDatas->getFile(), $brokenFilePath);
-        $fs->remove($metaDatas->getFile());
+        $filename=explode("/",$filepath);
+        $filename=end($filename);
+        $mod_date=date("Y/Y-M.", filemtime($filepath));
+        $brokenFilePath = $brokenDir . '/' .$mod_date . '/' .$filename . '-' . substr(md5(uniqid(rand(), true)), 0, 6) ;
+        $fs->copy($filepath, $brokenFilePath);
+        $fs->remove($filepath);
         echo 'Broken: ' . $filename . ' => ' . pathinfo($brokenFilePath, PATHINFO_BASENAME) . PHP_EOL;
 
-        foreach ($metaDatas as $metadata) {
-            if ((string)$metadata->getTag() != 'Composite:ThumbnailImage') {
-                var_dump((string)$metadata->getTag() . '::' . $metadata->getValue()->asString());
-            }
-        }
+        
     }
 
     if (0 && $filename == '2013-12-18 175950107701.jpg') {
